@@ -25,15 +25,19 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+
 try:
     from torch.utils.tensorboard import SummaryWriter
+
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
 
 from utils.taming_utils import compute_gaussian_score, get_edges, get_count_array
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, websockets, score_coefficients, args):
+
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint,
+             debug_from, websockets, score_coefficients, args):
     first_iter = 0
     densify_iter_num = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -47,17 +51,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    iter_start = torch.cuda.Event(enable_timing = True)
-    iter_end = torch.cuda.Event(enable_timing = True)
+    iter_start = torch.cuda.Event(enable_timing=True)
+    iter_end = torch.cuda.Event(enable_timing=True)
 
     viewpoint_stack = scene.getTrainCameras().copy()
     viewpoint_indices = list(range(len(viewpoint_stack)))
 
     # record time
     time_taken = {
-            "forward": [],
-            "backward": [],
-            "step": []
+        "forward": [],
+        "backward": [],
+        "step": []
     }
     start_time = torch.cuda.Event(enable_timing=True)
     end_time = torch.cuda.Event(enable_timing=True)
@@ -82,7 +86,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 net_image = render(cam, gaussians, pipe, background, 1.0)["render"]
                 network_gui_ws.latest_width = cam.image_width
                 network_gui_ws.latest_height = cam.image_height
-                network_gui_ws.latest_result = net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
+                network_gui_ws.latest_result = net_image_bytes = memoryview(
+                    (torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
 
         iter_start.record()
 
@@ -112,7 +117,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             start_time.record()
 
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg[
+            "visibility_filter"], render_pkg["radii"]
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
@@ -145,7 +151,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.close()
 
             # Log and save
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
+            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render,
+                            (pipe, background))
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -171,16 +178,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                         camlist.append(my_viewpoint_stack.pop(loc))
                         edge_losses.append(edges_stack.pop(loc))
 
-                    gaussian_importance = compute_gaussian_score(scene, camlist, edge_losses, gaussians, pipe, bg, score_coefficients, opt)                    
-                    gaussians.densify_with_score(scores = gaussian_importance, 
-                                                max_screen_size = size_threshold, 
-                                                min_opacity = 0.005, 
-                                                extent = scene.cameras_extent, 
-                                                budget=counts_array[densify_iter_num+1], 
-                                                radii=radii,
-                                                iter_num=densify_iter_num)
+                    gaussian_importance = compute_gaussian_score(scene, camlist, edge_losses, gaussians, pipe, bg, score_coefficients, opt)
+                    gaussians.densify_with_score(scores=gaussian_importance,
+                                                 max_screen_size=size_threshold,
+                                                 min_opacity=0.005,
+                                                 extent=scene.cameras_extent,
+                                                 budget=counts_array[densify_iter_num + 1],
+                                                 radii=radii,
+                                                 iter_num=densify_iter_num)
                     densify_iter_num += 1
-                
+
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
 
@@ -194,18 +201,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration < opt.iterations:
                 if opt.optimizer_type == "default":
                     gaussians.optimizer.step()
-                    gaussians.optimizer.zero_grad(set_to_none = True)
+                    gaussians.optimizer.zero_grad(set_to_none=True)
                     if args.sh_lower:
                         if iteration % 16 == 0:
                             gaussians.shoptimizer.step()
-                            gaussians.shoptimizer.zero_grad(set_to_none = True)
+                            gaussians.shoptimizer.zero_grad(set_to_none=True)
                     else:
                         gaussians.shoptimizer.step()
-                        gaussians.shoptimizer.zero_grad(set_to_none = True)
+                        gaussians.shoptimizer.zero_grad(set_to_none=True)
                 elif opt.optimizer_type == "sparse_adam":
                     visible = radii > 0
                     gaussians.optimizer.step(visible, radii.shape[0])
-                    gaussians.optimizer.zero_grad(set_to_none = True)
+                    gaussians.optimizer.zero_grad(set_to_none=True)
             if args.benchmark_dir:
                 end_time.record()
                 torch.cuda.synchronize()
@@ -225,7 +232,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
 
         if args.benchmark_dir:
-            os.makedirs(args.benchmark_dir, exist_ok = True)
+            os.makedirs(args.benchmark_dir, exist_ok=True)
             np.save(os.path.join(args.benchmark_dir, "forward.npy"), np.array(time_taken["forward"]))
             np.save(os.path.join(args.benchmark_dir, "backward.npy"), np.array(time_taken["backward"]))
             np.save(os.path.join(args.benchmark_dir, "step.npy"), np.array(time_taken["step"]))
@@ -233,18 +240,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     end = time.time()
     scene.save(iteration)
     print(f"Time taken by {os.getenv('OAR_JOB_ID')}: {end - start}s")
-    
-def prepare_output_and_logger(args):    
+
+
+def prepare_output_and_logger(args):
     if not args.model_path:
         if os.getenv('OAR_JOB_ID'):
-            unique_str=os.getenv('OAR_JOB_ID')
+            unique_str = os.getenv('OAR_JOB_ID')
         else:
             unique_str = str(uuid.uuid4())
         args.model_path = os.path.join("./output/", unique_str)
-        
+
     # Set up output folder
     print("Output folder: {}".format(args.model_path))
-    os.makedirs(args.model_path, exist_ok = True)
+    os.makedirs(args.model_path, exist_ok=True)
     with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
         cfg_log_f.write(str(Namespace(**vars(args))))
 
@@ -256,7 +264,8 @@ def prepare_output_and_logger(args):
         print("Tensorboard not available: not logging progress")
     return tb_writer
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs):
+
+def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene: Scene, renderFunc, renderArgs):
     if tb_writer:
         tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
         tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
@@ -265,8 +274,8 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
+        validation_configs = ({'name': 'test', 'cameras': scene.getTestCameras()},
+                              {'name': 'train', 'cameras': [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
 
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
@@ -278,7 +287,8 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     if tb_writer and (idx < 5):
                         tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
                         if iteration == testing_iterations[0]:
-                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
+                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None],
+                                                 global_step=iteration)
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
                     ssim_test += fast_ssim(image.unsqueeze(0), gt_image.unsqueeze(0)).mean().double()
@@ -286,7 +296,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])
-                l1_test /= len(config['cameras'])          
+                l1_test /= len(config['cameras'])
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config['name'], l1_test, psnr_test))
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
@@ -298,6 +308,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
             tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
             tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
         torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -313,7 +324,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[30_000])
-    parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--start_checkpoint", type=str, default=None)
     parser.add_argument("--cams", type=int, default=10)
     parser.add_argument("--budget", type=float, default=20)
     parser.add_argument("--mode", type=str, default="multiplier", choices=["multiplier", "final_count"])
@@ -323,28 +334,30 @@ if __name__ == "__main__":
     parser.add_argument("--benchmark_dir", type=str, default=None)
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
-    
+
     print("Optimizing " + args.model_path)
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    if(args.websockets):
+    if (args.websockets):
         network_gui_ws.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    score_coefficients = {'view_importance': 50, 'edge_importance': 50, 'mse_importance': 50, 'grad_importance': 25, 'dist_importance': 50, 'opac_importance': 100, 'dept_importance': 5, 'loss_importance': 10, 'radii_importance': 10, 'scale_importance': 25, 'count_importance': 0.1, 'blend_importance': 50}
-    
+    score_coefficients = {'view_importance': 50, 'edge_importance': 50, 'mse_importance': 50, 'grad_importance': 25, 'dist_importance': 50,
+                          'opac_importance': 100, 'dept_importance': 5, 'loss_importance': 10, 'radii_importance': 10, 'scale_importance': 25,
+                          'count_importance': 0.1, 'blend_importance': 50}
+
     training(
-        lp.extract(args), 
-        op.extract(args), 
-        pp.extract(args), 
-        args.test_iterations, 
-        args.save_iterations, 
-        args.checkpoint_iterations, 
-        args.start_checkpoint, 
-        args.debug_from, 
-        args.websockets, 
-        score_coefficients, 
+        lp.extract(args),
+        op.extract(args),
+        pp.extract(args),
+        args.test_iterations,
+        args.save_iterations,
+        args.checkpoint_iterations,
+        args.start_checkpoint,
+        args.debug_from,
+        args.websockets,
+        score_coefficients,
         args
     )
 

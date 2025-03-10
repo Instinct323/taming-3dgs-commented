@@ -15,11 +15,14 @@ from datetime import datetime
 import numpy as np
 import random
 
+
 def identity_gate(x):
     return x
 
+
 def inverse_sigmoid(x):
-    return torch.log(x/(1-x))
+    return torch.log(x / (1 - x))
+
 
 def PILtoTorch(pil_image, resolution):
     resized_image_PIL = pil_image.resize(resolution)
@@ -29,8 +32,9 @@ def PILtoTorch(pil_image, resolution):
     else:
         return resized_image.unsqueeze(dim=-1).permute(2, 0, 1)
 
+
 def get_expon_lr_func(
-    lr_init, lr_final, lr_delay_steps=0, lr_delay_mult=1.0, max_steps=1000000
+        lr_init, lr_final, lr_delay_steps=0, lr_delay_mult=1.0, max_steps=1000000
 ):
     """
     Copied from Plenoxels
@@ -64,7 +68,9 @@ def get_expon_lr_func(
 
     return helper
 
+
 def strip_lowerdiag(L):
+    """ 只保存上三角部分的数值"""
     uncertainty = torch.zeros((L.shape[0], 6), dtype=torch.float, device="cuda")
 
     uncertainty[:, 0] = L[:, 0, 0]
@@ -75,11 +81,14 @@ def strip_lowerdiag(L):
     uncertainty[:, 5] = L[:, 2, 2]
     return uncertainty
 
+
 def strip_symmetric(sym):
     return strip_lowerdiag(sym)
 
+
 def build_rotation(r):
-    norm = torch.sqrt(r[:,0]*r[:,0] + r[:,1]*r[:,1] + r[:,2]*r[:,2] + r[:,3]*r[:,3])
+    """ 四元数 -> 旋转矩阵"""
+    norm = torch.sqrt(r[:, 0] * r[:, 0] + r[:, 1] * r[:, 1] + r[:, 2] * r[:, 2] + r[:, 3] * r[:, 3])
 
     q = r / norm[:, None]
 
@@ -90,30 +99,35 @@ def build_rotation(r):
     y = q[:, 2]
     z = q[:, 3]
 
-    R[:, 0, 0] = 1 - 2 * (y*y + z*z)
-    R[:, 0, 1] = 2 * (x*y - r*z)
-    R[:, 0, 2] = 2 * (x*z + r*y)
-    R[:, 1, 0] = 2 * (x*y + r*z)
-    R[:, 1, 1] = 1 - 2 * (x*x + z*z)
-    R[:, 1, 2] = 2 * (y*z - r*x)
-    R[:, 2, 0] = 2 * (x*z - r*y)
-    R[:, 2, 1] = 2 * (y*z + r*x)
-    R[:, 2, 2] = 1 - 2 * (x*x + y*y)
+    R[:, 0, 0] = 1 - 2 * (y * y + z * z)
+    R[:, 0, 1] = 2 * (x * y - r * z)
+    R[:, 0, 2] = 2 * (x * z + r * y)
+    R[:, 1, 0] = 2 * (x * y + r * z)
+    R[:, 1, 1] = 1 - 2 * (x * x + z * z)
+    R[:, 1, 2] = 2 * (y * z - r * x)
+    R[:, 2, 0] = 2 * (x * z - r * y)
+    R[:, 2, 1] = 2 * (y * z + r * x)
+    R[:, 2, 2] = 1 - 2 * (x * x + y * y)
     return R
+
 
 def build_scaling_rotation(s, r):
     L = torch.zeros((s.shape[0], 3, 3), dtype=torch.float, device="cuda")
     R = build_rotation(r)
 
-    L[:,0,0] = s[:,0]
-    L[:,1,1] = s[:,1]
-    L[:,2,2] = s[:,2]
+    # 得到尺度的对角阵
+    L[:, 0, 0] = s[:, 0]
+    L[:, 1, 1] = s[:, 1]
+    L[:, 2, 2] = s[:, 2]
 
+    # 缩放后, 得到带尺度的旋转矩阵
     L = R @ L
     return L
 
+
 def safe_state(silent):
     old_f = sys.stdout
+
     class F:
         def __init__(self, silent):
             self.silent = silent
