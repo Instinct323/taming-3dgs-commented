@@ -14,6 +14,6 @@ dependencies:
   - tqdm
   - websockets
   - pip:
-    - submodules/diff-gaussian-rasterization
-    - submodules/simple-knn
-    - submodules/fused-ssim
+      - submodules/diff-gaussian-rasterization
+      - submodules/simple-knn
+      - submodules/fused-ssim

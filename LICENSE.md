@@ -13,9 +13,9 @@ The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
 The Software constitues modifications to the 3D Gaussian Splatting codebase, which is
-licensed according to the text in "LICENSE_ORIGINAL". ONLY modifications made by the 
-authors are licensed under the MIT License. To facilitate the identification of the 
-modifications licensed under the MIT License, a diff file ("changes") highlighting 
+licensed according to the text in "LICENSE_ORIGINAL". ONLY modifications made by the
+authors are licensed under the MIT License. To facilitate the identification of the
+modifications licensed under the MIT License, a diff file ("changes") highlighting
 these modifications is included.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR

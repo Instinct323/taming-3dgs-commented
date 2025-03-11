@@ -368,8 +368,8 @@ jobs:
         - CMAKE_ENV="--parallel"
 
 before_script:
-    - cmake --version
-    - eval "${MATRIX_EVAL}"
+  - cmake --version
+  - eval "${MATRIX_EVAL}"
 
 script:
   - ${CC} --version

@@ -9,9 +9,9 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from argparse import ArgumentParser, Namespace
-import sys
 import os
+import sys
+from argparse import ArgumentParser, Namespace
 
 
 class GroupParams:

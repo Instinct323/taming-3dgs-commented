@@ -9,10 +9,10 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import os
 import logging
-from argparse import ArgumentParser
+import os
 import shutil
+from argparse import ArgumentParser
 
 # This Python script is based on the shell converter script provided in the MipNerF 360 repository.
 parser = ArgumentParser("Colmap converter")
@@ -32,8 +32,8 @@ if not args.skip_matching:
     os.makedirs(args.source_path + "/distorted/sparse", exist_ok=True)
 
     ## Feature extraction
-    feat_extracton_cmd = colmap_command + " feature_extractor "\
-        "--database_path " + args.source_path + "/distorted/database.db \
+    feat_extracton_cmd = colmap_command + " feature_extractor " \
+                                          "--database_path " + args.source_path + "/distorted/database.db \
         --image_path " + args.source_path + "/input \
         --ImageReader.single_camera 1 \
         --ImageReader.camera_model " + args.camera + " \
@@ -57,8 +57,8 @@ if not args.skip_matching:
     # decreasing it speeds up bundle adjustment steps.
     mapper_cmd = (colmap_command + " mapper \
         --database_path " + args.source_path + "/distorted/database.db \
-        --image_path "  + args.source_path + "/input \
-        --output_path "  + args.source_path + "/distorted/sparse \
+        --image_path " + args.source_path + "/input \
+        --output_path " + args.source_path + "/distorted/sparse \
         --Mapper.ba_global_function_tolerance=0.000001")
     exit_code = os.system(mapper_cmd)
     if exit_code != 0:
@@ -87,7 +87,7 @@ for file in files:
     destination_file = os.path.join(args.source_path, "sparse", "0", file)
     shutil.move(source_file, destination_file)
 
-if(args.resize):
+if (args.resize):
     print("Copying and resizing...")
 
     # Resize images.

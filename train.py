@@ -9,22 +9,26 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import torch
-import numpy as np
-import os, random, time
-from random import randint
-from lpipsPyTorch import lpips
-from utils.loss_utils import l1_loss
-from fused_ssim import fused_ssim as fast_ssim
-from gaussian_renderer import render, network_gui_ws
+import os
+import random
 import sys
+import time
+import uuid
+from argparse import ArgumentParser, Namespace
+from random import randint
+
+import numpy as np
+import torch
+from fused_ssim import fused_ssim as fast_ssim
+from tqdm import tqdm
+
+from arguments import ModelParams, PipelineParams, OptimizationParams
+from gaussian_renderer import render, network_gui_ws
+from lpipsPyTorch import lpips
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
-import uuid
-from tqdm import tqdm
 from utils.image_utils import psnr
-from argparse import ArgumentParser, Namespace
-from arguments import ModelParams, PipelineParams, OptimizationParams
+from utils.loss_utils import l1_loss
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -41,6 +45,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter = 0
     densify_iter_num = 0
     tb_writer = prepare_output_and_logger(dataset)
+    # 初始化 3DGS
+    # TODO: 有些实例属性还不清楚
     gaussians = GaussianModel(dataset.sh_degree, opt.optimizer_type)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)

@@ -93,10 +93,10 @@ function initBuffers(gl) {
 
     // Define the positions for a rectangle that covers the entire canvas.
     const positions = [
-        -1.0,  1.0,
-         1.0,  1.0,
+        -1.0, 1.0,
+        1.0, 1.0,
         -1.0, -1.0,
-         1.0, -1.0,
+        1.0, -1.0,
     ];
 
     // Pass the list of positions into WebGL to build the shape.
@@ -167,7 +167,7 @@ function drawScene(gl, programInfo, buffers) {
     // Specify the texture to use.
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-	gl.useProgram(programInfo.program)
+    gl.useProgram(programInfo.program)
     gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
 
     // Draw the rectangle.
@@ -192,10 +192,10 @@ socket.binaryType = 'arraybuffer'; // Ensure you receive the data as ArrayBuffer
 
 intToSend = 4;
 
-function sendInteger(){
-	intToSend = parseInt(document.getElementById('numberInput').value, 10);
+function sendInteger() {
+    intToSend = parseInt(document.getElementById('numberInput').value, 10);
     const arrayBuffer = new ArrayBuffer(4);
-	const view = new DataView(arrayBuffer);
+    const view = new DataView(arrayBuffer);
     view.setInt32(0, intToSend, false);
     socket.send(arrayBuffer);
 };
@@ -204,7 +204,7 @@ socket.onopen = function (event) {
     console.log('Connected to WebSocket server.');
 
     // Optionally send binary data like a negative integer as previously discussed
-	sendInteger();
+    sendInteger();
 };
 
 socket.onmessage = function (event) {
@@ -216,33 +216,32 @@ socket.onmessage = function (event) {
     // Read the two integers (assuming they are the first 8 bytes, 4 bytes each)
     const width = view.getInt32(0, true);  // Read first integer (little-endian)
     const height = view.getInt32(4, true);  // Read second integer (little-endian)
-	
-	const canvas = document.getElementById('glcanvas');
-	if(canvas.width != width || canvas.height != height)
-	{
-		const dpr = window.devicePixelRatio || 1; // Get the device's pixel ratio
 
-		// Set the drawing buffer's size
-		canvas.width = width * dpr;
-		canvas.height = height * dpr;
-		
-		gl.viewport(0, 0, width * dpr, height * dpr)
-	}
+    const canvas = document.getElementById('glcanvas');
+    if (canvas.width != width || canvas.height != height) {
+        const dpr = window.devicePixelRatio || 1; // Get the device's pixel ratio
+
+        // Set the drawing buffer's size
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+
+        gl.viewport(0, 0, width * dpr, height * dpr)
+    }
 
     // Create a TypedArray for the remaining bytes (tensor data)
     // Adjust the offset and length according to the actual data size
     const data = new Uint8Array(buffer, 8);  // Skip the first 8 bytes
-	
-		 if (data.byteLength !== width * height * 3) {
-	 console.log(data.byteLength, width * height * 3)
-	 }
+
+    if (data.byteLength !== width * height * 3) {
+        console.log(data.byteLength, width * height * 3)
+    }
 
     //console.log("Data as array:", data);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
-	
-	drawScene(gl, programInfo, buffers);
-	
-	sendInteger();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
+
+    drawScene(gl, programInfo, buffers);
+
+    sendInteger();
 };
 
 socket.onerror = function (error) {

@@ -9,20 +9,20 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import torch
-
 host = "127.0.0.1"
 port = 6009
 
 import asyncio
-import websockets
-import threading
 import struct
+import threading
+
+import websockets
 
 curr_id = -1
 latest_width = 0
 latest_height = 0
 latest_result = bytes([])
+
 
 async def echo(websocket, path):
     global curr_id
@@ -43,13 +43,16 @@ async def echo(websocket, path):
     except websockets.exceptions.ConnectionClosed as e:
         print(f"Connection closed: {e}")
 
+
 async def wuppi(host, port):
     async with websockets.serve(echo, host, port):
         await asyncio.Future()  # run forever
 
+
 def run_asyncio_loop(wish_host, wish_port):
     asyncio.run(wuppi(wish_host, wish_port))
 
+
 def init(wish_host, wish_port):
-    thread = threading.Thread(target=run_asyncio_loop,args=[wish_host, wish_port])
+    thread = threading.Thread(target=run_asyncio_loop, args=[wish_host, wish_port])
     thread.start()
