@@ -72,15 +72,19 @@ class GaussianModel:
         self.max_sh_degree = sh_degree
         # 创建一系列 3DGS 空集
         self._xyz = torch.empty(0)
-        # TODO: 以下 2 row 是什么东西
+        # 球谐函数的一阶参数, 由点云 RGB 初始化 [n, 1, 3]
         self._features_dc = torch.empty(0)
+        # 球谐函数的其它参数 [n, N^2-1, 3]
         self._features_rest = torch.empty(0)
+        # 尺度, 用 KNN 距离初始化
         self._scaling = torch.empty(0)
-        # [n, 4]: 应该是很多个四元数
+        # [n, 4]: 四元数, 初始无旋转
         self._rotation = torch.empty(0)
+        # 密度, 初始化为 0.1
         self._opacity = torch.empty(0)
-        # TODO: 以下 3 row 是什么东西
+        # 初始化为 0
         self.max_radii2D = torch.empty(0)
+        # TODO: [n, 1]
         self.xyz_gradient_accum = torch.empty(0)
         self.denom = torch.empty(0)
 
@@ -169,24 +173,33 @@ class GaussianModel:
             self.active_sh_degree += 1
 
     def create_from_pcd(self, pcd: BasicPointCloud, spatial_lr_scale: float):
+        """ :param spatial_lr_scale: 最远相机的距离 * 1.1"""
         self.spatial_lr_scale = spatial_lr_scale
+        # 初始化一阶球谐函数的点云
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
+        # 分别对应三个通道的球谐函数参数
         features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
         features[:, :3, 0] = fused_color
+        # 本身就是 0, 再次赋值 ?
         features[:, 3:, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
-
+        # 计算 KNN 距离^2, 以初始化 3DGS 尺度 (球形)
+        # input [n, 3] -> output [n,]
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
         scales = torch.log(torch.sqrt(dist2))[..., None].repeat(1, 3)
+        # 初始化旋转四元数
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
 
+        # 设置初始密度为 0.1, 协助梯度传播
         opacities = self.inverse_opacity_activation(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
+        # 球谐函数的一阶参数, 可直接转为颜色 [n, 1, 3]
         self._features_dc = nn.Parameter(features[:, :, 0:1].transpose(1, 2).contiguous().requires_grad_(True))
+        # 球谐函数的其它参数 [n, N^2-1, 3]
         self._features_rest = nn.Parameter(features[:, :, 1:].transpose(1, 2).contiguous().requires_grad_(True))
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
@@ -194,6 +207,7 @@ class GaussianModel:
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
 
     def training_setup(self, training_args):
+        # percent_dense 默认值: 0.01
         self.percent_dense = training_args.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
@@ -207,6 +221,7 @@ class GaussianModel:
         ]
         sh_l = [{'params': [self._features_rest], 'lr': training_args.shfeature_lr / 20.0, "name": "f_rest"}]
 
+        # 初始化优化器
         if self.optimizer_type == "default":
             self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
             self.shoptimizer = torch.optim.Adam(sh_l, lr=0.0, eps=1e-15)
@@ -568,3 +583,10 @@ class GaussianModel:
         self.tmp_radii = None
 
         torch.cuda.empty_cache()
+
+
+if __name__ == '__main__':
+    tensor = torch.rand(10, 3).cuda()
+    print(tensor)
+    dist2 = distCUDA2(tensor)
+    print(dist2)

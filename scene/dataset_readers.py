@@ -13,7 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 import numpy as np
 from PIL import Image
@@ -41,9 +41,9 @@ class CameraInfo(NamedTuple):
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
-    train_cameras: list
-    test_cameras: list
-    nerf_normalization: dict
+    train_cameras: List[CameraInfo]
+    test_cameras: List[CameraInfo]
+    nerf_normalization: dict    # {"translate": -相机位置的均值,, "radius": 中心到相机的最远距离}
     ply_path: str
 
 
@@ -52,6 +52,7 @@ def getNerfppNorm(cam_info):
         cam_centers = np.hstack(cam_centers)
         avg_cam_center = np.mean(cam_centers, axis=1, keepdims=True)
         center = avg_cam_center
+        # 计算中心点到其它相机的距离, 并取最大值
         dist = np.linalg.norm(cam_centers - center, axis=0, keepdims=True)
         diagonal = np.max(dist)
         return center.flatten(), diagonal
@@ -61,8 +62,10 @@ def getNerfppNorm(cam_info):
     for cam in cam_info:
         W2C = getWorld2View2(cam.R, cam.T)
         C2W = np.linalg.inv(W2C)
+        # 取 C2W 的平移向量, 即相机在 W 中的位置
         cam_centers.append(C2W[:3, 3:4])
 
+    # 相机位置的均值, 中心到相机的最远距离
     center, diagonal = get_center_and_diag(cam_centers)
     radius = diagonal * 1.1
 
@@ -71,7 +74,8 @@ def getNerfppNorm(cam_info):
     return {"translate": translate, "radius": radius}
 
 
-def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
+def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder) -> List[CameraInfo]:
+    """ 为每一张图像初始化 CameraInfo (包含 SE3、FoV 等基础信息)"""
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
@@ -79,6 +83,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         sys.stdout.write("Reading camera {}/{}".format(idx + 1, len(cam_extrinsics)))
         sys.stdout.flush()
 
+        # 找到每张图像所对应的相机
         extr = cam_extrinsics[key]
         intr = cam_intrinsics[extr.camera_id]
         height = intr.height
@@ -88,6 +93,8 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         R = np.transpose(qvec2rotmat(extr.qvec))
         T = np.array(extr.tvec)
 
+        # 根据焦距、图像尺寸计算相机的 FoV
+        # TODO: 无法处理全景图像
         if intr.model == "SIMPLE_PINHOLE":
             focal_length_x = intr.params[0]
             FovY = focal2fov(focal_length_x, height)
@@ -121,6 +128,8 @@ def fetchPly(path):
 
 
 def storePly(path, xyz, rgb):
+    """ 默认法线为 0"""
+
     # Define the dtype for the structured array
     dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
              ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
@@ -139,6 +148,8 @@ def storePly(path, xyz, rgb):
 
 
 def readColmapSceneInfo(path, images, eval, llffhold=8):
+    # images.*: 相机外参 W2C, Dict[int, Image]
+    # cameras.*: 相机内参, Dict[int, Camera]
     try:
         # 二进制格式解析
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
@@ -153,17 +164,21 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
         cam_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
 
     reading_dir = "images" if images == None else images
+    # 封装外参信息: List[CameraInfo]
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics,
                                            images_folder=os.path.join(path, reading_dir))
+    # 非原地排序用 copy ?
     cam_infos = sorted(cam_infos_unsorted.copy(), key=lambda x: x.image_name)
 
     if eval:
+        # 不是用切片就好了 ?
         train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
         test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
     else:
         train_cam_infos = cam_infos
         test_cam_infos = []
 
+    # -相机位置均值, 最远相机的距离
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
     ply_path = os.path.join(path, "sparse/0/points3D.ply")
@@ -175,6 +190,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
             xyz, rgb, _ = read_points3D_binary(bin_path)
         except:
             xyz, rgb, _ = read_points3D_text(txt_path)
+        # 存储除了法线外的信息
         storePly(ply_path, xyz, rgb)
     try:
         pcd = fetchPly(ply_path)
@@ -233,6 +249,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+    # List[CameraInfo]
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
@@ -242,9 +259,12 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
 
+    # -相机位置均值, 最远相机的距离
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
     ply_path = os.path.join(path, "points3d.ply")
+
+    # TODO: 虽然代码上允许 points3d.ply 不存在, 但其中的 pcd 变量会被覆盖, 应该是效果不好
     if not os.path.exists(ply_path):
         # Since this data set has no colmap data, we start with random points
         num_pts = 100_000
@@ -257,6 +277,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
+        # BasicPointCloud
         pcd = fetchPly(ply_path)
     except:
         pcd = None

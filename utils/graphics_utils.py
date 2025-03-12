@@ -55,6 +55,7 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
 
 
 def getProjectionMatrix(znear, zfar, fovX, fovY):
+    # TODO: 投影矩阵的计算方法
     tanHalfFovY = math.tan((fovY / 2))
     tanHalfFovX = math.tan((fovX / 2))
 

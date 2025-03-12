@@ -42,9 +42,11 @@ def loadCam(args, id, cam_info, resolution_scale):
 
     resized_image_rgb = PILtoTorch(cam_info.image, resolution)
 
+    # [C, H, W]
     gt_image = resized_image_rgb[:3, ...]
     loaded_mask = None
 
+    # 应该是 shape[0] ? 写错了 ?
     if resized_image_rgb.shape[1] == 4:
         loaded_mask = resized_image_rgb[3:4, ...]
 
@@ -72,6 +74,7 @@ def camera_to_JSON(id, camera: Camera):
     W2C = np.linalg.inv(Rt)
     pos = W2C[:3, 3]
     rot = W2C[:3, :3]
+    # 不如直接 tolist()
     serializable_array_2d = [x.tolist() for x in rot]
     camera_entry = {
         'id': id,

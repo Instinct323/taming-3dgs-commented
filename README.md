@@ -5,6 +5,8 @@
     ├── dataset_readers.py: 数据集的载入方法
     ├── colmap_loader.py: Colmap 数据的反序列化方法, 仅被 dataset_readers 调用 
     └── gaussian_model.py: 3DGS 点云集合
+└── utils
+    ├── 
 ```
 
 # Taming 3DGS: High-Quality Radiance Fields with Limited Resources

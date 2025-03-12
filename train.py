@@ -46,14 +46,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     densify_iter_num = 0
     tb_writer = prepare_output_and_logger(dataset)
     # 初始化 3DGS
-    # TODO: 有些实例属性还不清楚
     gaussians = GaussianModel(dataset.sh_degree, opt.optimizer_type)
+    # 载入数据集, 初始化 3DGS 点集
     scene = Scene(dataset, gaussians)
+    # 初始化优化器
     gaussians.training_setup(opt)
+    # 载入 checkpoint
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
+    # 背景颜色
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
