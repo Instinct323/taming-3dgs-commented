@@ -86,6 +86,7 @@ class GaussianModel:
         self.max_radii2D = torch.empty(0)
         # TODO: [n, 1]
         self.xyz_gradient_accum = torch.empty(0)
+        # 被观测的次数
         self.denom = torch.empty(0)
 
         self.optimizer = None
@@ -275,6 +276,7 @@ class GaussianModel:
         PlyData([el]).write(path)
 
     def reset_opacity(self):
+        # 将密度重置为 0.01
         opacities_new = self.inverse_opacity_activation(torch.min(self.get_opacity, torch.ones_like(self.get_opacity) * 0.01))
         optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")
         self._opacity = optimizable_tensors["opacity"]

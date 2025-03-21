@@ -92,6 +92,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     bg = torch.rand((3), device="cuda") if opt.random_background else background
     start = time.time()
     for iteration in range(first_iter, opt.iterations + 1):
+        # fixme: 自行添加的代码
+        # torch.cuda.empty_cache()
 
         # TODO: 不清楚 websocket
         if websockets:
@@ -171,6 +173,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
+            # 每隔 10 次更新一次进度条
             if iteration % 10 == 0:
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
                 progress_bar.update(10)
@@ -187,7 +190,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Densification
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
+                # 记录 3DGS 在屏幕投影的最大半径
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
+                # viewspace_point_tensor: mean2D, grad 表 3DGS 在视角空间的位移, 累加 xy 方向的范数
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
@@ -195,11 +200,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     my_viewpoint_stack = scene.getTrainCameras().copy()
                     edges_stack = all_edges.copy()
 
+                    # 官方给定默认 10 个, 不设定时为全部
                     num_cams = args.cams
                     if args.cams == -1:
                         num_cams = len(my_viewpoint_stack)
                     edge_losses = []
                     camlist = []
+                    # 不重复地随机选取 num_cams 个视角
                     for _ in range(num_cams):
                         loc = random.randint(0, len(my_viewpoint_stack) - 1)
                         camlist.append(my_viewpoint_stack.pop(loc))
@@ -215,10 +222,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                                                  iter_num=densify_iter_num)
                     densify_iter_num += 1
 
+                # 固定间隔 / 白色背景时刚开始稠密化, 将所有 3DGS 的密度设为 0.01
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
 
             if iteration == args.ho_iteration:
+                # Taming-3DGS: 独有, 修改激活函数为 abs
                 print("Release opacity limit")
                 gaussians.modify_functions()
 
@@ -354,8 +363,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[30_000])
     parser.add_argument("--start_checkpoint", type=str, default=None)
     parser.add_argument("--cams", type=int, default=10)
-    parser.add_argument("--budget", type=float, default=20)
-    parser.add_argument("--mode", type=str, default="multiplier", choices=["multiplier", "final_count"])
+    parser.add_argument("--budget", type=float, default=1.5e6)
+    parser.add_argument("--mode", type=str, default="final_count", choices=["multiplier", "final_count"])
     parser.add_argument("--websockets", action='store_true', default=False)
     parser.add_argument("--ho_iteration", type=int, default=15000)
     parser.add_argument("--sh_lower", action='store_true', default=False)
