@@ -14,6 +14,7 @@ import random
 import sys
 import time
 import uuid
+import cv2
 from argparse import ArgumentParser, Namespace
 from random import randint
 
@@ -63,6 +64,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     iter_start = torch.cuda.Event(enable_timing=True)
     iter_end = torch.cuda.Event(enable_timing=True)
 
+    # List[Camera]
     viewpoint_stack = scene.getTrainCameras().copy()
     viewpoint_indices = list(range(len(viewpoint_stack)))
 
@@ -77,7 +79,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     all_edges = []
     for view in scene.getTrainCameras():
+        # 包含边缘的张量图像 (灰度)
         edges_loss = get_edges(view.original_image).squeeze().cuda()
+        # 标准化后, 转到 CPU
         edges_loss_norm = (edges_loss - torch.min(edges_loss)) / (torch.max(edges_loss) - torch.min(edges_loss))
         all_edges.append(edges_loss_norm.cpu())
 
@@ -89,6 +93,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     start = time.time()
     for iteration in range(first_iter, opt.iterations + 1):
 
+        # TODO: 不清楚 websocket
         if websockets:
             if network_gui_ws.curr_id >= 0 and network_gui_ws.curr_id < len(scene.getTrainCameras()):
                 cam = scene.getTrainCameras()[network_gui_ws.curr_id]
@@ -101,19 +106,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         iter_start.record()
 
         if counts_array == None:
+            # 一条单调上升曲线 (先快后慢)
             counts_array = get_count_array(len(scene.gaussians.get_xyz), args.budget, opt, mode=args.mode)
             print(counts_array)
 
         gaussians.update_learning_rate(iteration)
 
-        # Every 1000 its we increase the levels of SH up to a maximum degree
+        # 每迭代 1000 次, 增加一次 SH degree
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
 
-        # Pick a random Camera
+        # 也没找到哪里会清空这个变量，为什么重新初始化 ?
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
             viewpoint_indices = list(range(len(viewpoint_stack)))
+
+        # 弹出一个随机视角
         rand_idx = randint(0, len(viewpoint_indices) - 1)
         viewpoint_cam = viewpoint_stack.pop(rand_idx)
         _ = viewpoint_indices.pop(rand_idx)
@@ -126,10 +134,20 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             start_time.record()
 
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
+        # FIXME: 自己写的可视化
+        if iteration % 100 == 0:
+            x = (torch.clamp(render_pkg["render"].detach(), 0, 1) * 255).byte().permute(1, 2, 0).cpu().numpy()
+            cv2.imshow("render", x)
+            cv2.waitKey(1)
+
+        # for k, v in render_pkg.items():
+            # print(f"{k}: type={type(v)}, shape={getattr(v, 'shape', None)}")
+        # raise
+
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg[
             "visibility_filter"], render_pkg["radii"]
 
-        # Loss
+        # 损失函数
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         ssim_value = fast_ssim(image.unsqueeze(0), gt_image.unsqueeze(0))
@@ -327,6 +345,7 @@ if __name__ == "__main__":
     pp = PipelineParams(parser)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=6009)
+    # 可视化的轮次，但出现了报错
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])

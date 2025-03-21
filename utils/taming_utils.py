@@ -10,9 +10,10 @@ from .loss_utils import l1_loss
 def get_edges(image):
     image_pil = transforms.ToPILImage()(image)
     image_gray = image_pil.convert('L')
+    # 使用 FIND_EDGES 滤镜检测图像的边缘
     image_edges = image_gray.filter(ImageFilter.FIND_EDGES)
     image_edges_tensor = transforms.ToTensor()(image_edges)
-
+    # 包含边缘的张量图像
     return image_edges_tensor
 
 
@@ -105,11 +106,15 @@ def compute_photometric_loss(viewpoint_cam, image):
 def get_count_array(start_count, multiplier, opt, mode):
     # Eq. (2) of taming-3dgs
     if mode == "multiplier":
+        # 倍数
         budget = int(start_count * float(multiplier))
     elif mode == "final_count":
+        # 3DGS 的最终计数
         budget = multiplier
 
+    # 致密化的执行次数
     num_steps = ((opt.densify_until_iter - opt.densify_from_iter) // opt.densification_interval)
+    # 每次致密化所增加的 3DGS
     slope_lower_bound = (budget - start_count) / num_steps
 
     k = 2 * slope_lower_bound

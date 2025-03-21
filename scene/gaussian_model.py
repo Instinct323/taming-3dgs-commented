@@ -235,6 +235,7 @@ class GaussianModel:
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
         for param_group in self.optimizer.param_groups:
+            # 只修改 xyz 的学习率
             if param_group["name"] == "xyz":
                 lr = self.xyz_scheduler_args(iteration)
                 param_group['lr'] = lr

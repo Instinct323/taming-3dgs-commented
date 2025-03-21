@@ -41,7 +41,7 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
-        # SceneInfo
+        # SceneInfo: pcd 可能为空
         # <src>/sparse: 以 Colmap 格式解析
         if os.path.exists(os.path.join(args.source_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
